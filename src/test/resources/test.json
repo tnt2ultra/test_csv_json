@@ -1,0 +1,8 @@
+[
+  {    "group": "group1",    "type": "type1",    "number": 1,    "weight": 10  },
+  {    "group": "group1",    "type": "type2",    "number": 2,    "weight": 20  },
+  {    "group": "group1",    "type": "type2",    "number": 2,    "weight": 20  },
+  {    "group": "group2",    "type": "type3",    "number": 3,    "weight": 30  },
+  {    "group": "group2",    "type": "type3",    "number": 3,    "weight": 30  },
+  {    "group": "group2",    "type": "type3",    "number": 3,    "weight": 30  }
+]

@@ -1,0 +1,13 @@
+group,type,number,weight
+group1,type1,1,10
+group1,type1,1,10
+group1,type2,2,20
+group2,type1,3,30
+group2,type2,4,40
+group2,type2,4,40
+group3,type1,5,50
+group3,type2,6,60
+group3,type1,5,50
+group3,type2,6,60
+group3,type1,5,50
+group3,type2,6,60
