@@ -4,26 +4,27 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
+import static org.example.FileProcessor.printFreeMemory;
+
 public class Main {
     public static void main(String[] args) {
-        System.out.println("main started");
         try {
-            FileProcessor fileProcessor = new FileProcessor();
+            printFreeMemory(true);
             BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
             String input;
             do {
-                System.out.print("Введите путь к файлу или команду 'exit': ");
+                System.out.print("Enter the path to the file or the command 'exit': ");
                 input = reader.readLine();
                 if (!input.equals("exit")) {
                     try {
-                        fileProcessor.processFile(input);
+                        FileProcessor.processFile(input);
                     } catch (IOException e) {
-                        System.err.println("Ошибка при обработке файла: " + e.getMessage());
+                        System.err.println("Error processing the file: " + e.getMessage());
                     }
                 }
             } while (!input.equals("exit"));
         } catch (Exception e) {
-            System.err.println("Ошибка при чтении ввода: " + e.getMessage());
+            System.err.println("Error while reading: " + e.getMessage());
         }
     }
 }

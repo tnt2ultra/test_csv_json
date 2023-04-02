@@ -9,40 +9,48 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class FileProcessorTest {
 
-    private FileProcessor fileProcessor;
     private String testFilePathCsv;
     private String testFilePathJson;
     private String nonExistentFilePath;
 
     @BeforeEach
     void setUp() {
-        fileProcessor = new FileProcessor();
+        System.out.println("-------------");
         testFilePathCsv = "src/test/resources/test.csv";
         testFilePathJson = "src/test/resources/test.json";
         nonExistentFilePath = "nonexistent_file.txt";
     }
 
     @Test
-    void testProcessFile_Successful() throws IOException {
+    void testProcessFileCsv_Successful() throws IOException {
         boolean expectedContent = true;
-        boolean actualContent = fileProcessor.processFile(testFilePathCsv);
+        boolean actualContent = FileProcessor.processFile(testFilePathCsv);
         assertEquals(expectedContent, actualContent);
-        actualContent = fileProcessor.processFile(testFilePathJson);
+    }
+
+    @Test
+    void testProcessFileJson_Successful() throws IOException {
+        boolean expectedContent = true;
+        boolean actualContent = FileProcessor.processFile(testFilePathJson);
         assertEquals(expectedContent, actualContent);
     }
 
     @Test
     void testProcessFile_NonExistentFile() throws IOException {
         boolean expectedContent = false;
-        boolean actualContent = fileProcessor.processFile(nonExistentFilePath);
+        boolean actualContent = FileProcessor.processFile(nonExistentFilePath);
         assertEquals(expectedContent, actualContent);
     }
 
     @Test
     void testGetExtension() {
-        String testFilePath = "src/test/resources/test_output_file.txt";
+        String testFilePath = "src/test/resources/test_output_file.csv";
         String expectedExtension = FileProcessor.getExtension(testFilePath);
-        assertEquals("txt", expectedExtension);
+        assertEquals("csv", expectedExtension);
+
+        testFilePath = "src/test/resources/test_output_file.json";
+        expectedExtension = FileProcessor.getExtension(testFilePath);
+        assertEquals("json", expectedExtension);
     }
 
 }

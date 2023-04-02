@@ -10,88 +10,127 @@ import org.apache.commons.csv.CSVRecord;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 public class FileProcessor {
-    private final Map<String, Map<String, Integer>> duplicates = new HashMap<>();
-    private final Map<String, Long> groupWeights = new HashMap<>();
-    private long maxWeight = Long.MIN_VALUE;
-    private long minWeight = Long.MAX_VALUE;
+    static final int MAX_FILE_SIZE = 320 * 1024 * 1024;
+    static final boolean DEBUG_FLAG = false;
+    static Map<String, Map<String, Integer>> duplicates = new HashMap<>(10);
+    static List<String> uniqueStrings = new LinkedList<>();
+    static List<Integer> counts = new LinkedList<>();
+    static Map<String, BigInteger> groupWeights = new HashMap<>();
+    static long maxWeight;
+    static long minWeight;
+    static File file;
+    static String fileExtension;
+    static CSVParser parser;
+    static String group;
+    static String type;
+    static long weight;
+    static final Gson gson = new GsonBuilder().create();
+    static Map<String, Integer> groupDuplicates;
+    static JsonReader reader;
+    static MyObject object;
+    static int count;
+    static int countDone;
+    static long fileSize;
 
-    public boolean processFile(String path) throws IOException {
+    public static boolean processFile(String path) throws IOException {
         clear();
-        File file = new File(path);
+        file = new File(path);
         if (!file.exists() || !file.isFile()) {
-            System.err.println("Файл не найден!");
+            System.err.println("File not found!");
             return false;
         }
-        String fileExtension = getExtension(path); // Получение расширения файла
+        fileSize = file.length();
+        System.out.println("File size " + fileSize + " bytes. Using " + ((fileSize < MAX_FILE_SIZE) ? "Map" : "List"));
+        fileExtension = getExtension(path); // Получение расширения файла
+        printFreeMemory(true);
         switch (fileExtension) {
             case "csv":
                 processCsv(file);
+                printStatistics();
                 return true;
             case "json":
                 processJson(file);
+                printStatistics();
                 return true;
             default:
-                System.err.println("Некорректный формат файла!");
+                System.err.println("Incorrect file format!");
                 return false;
         }
     }
 
     public static String getExtension(String path) {
-        String fileExtension = "";
+        fileExtension = "";
         int dotIndex = path.lastIndexOf('.');
         if (dotIndex > 0) {
             fileExtension = path.substring(dotIndex + 1);
         }
-        System.out.println("file extension " + fileExtension);
         return fileExtension;
     }
 
-    private void clear() {
+    private static void clear() {
         duplicates.clear();
+        uniqueStrings.clear();
+        counts.clear();
         groupWeights.clear();
         maxWeight = Long.MIN_VALUE;
         minWeight = Long.MAX_VALUE;
+        count = 0;
+        countDone = 0;
+        fileSize = 0;
     }
 
-    private void processCsv(File file) throws IOException {
-        CSVParser parser = new CSVParser(new FileReader(file), CSVFormat.DEFAULT.builder()
+    private static void processCsv(File file) throws IOException {
+        parser = new CSVParser(new FileReader(file), CSVFormat.DEFAULT.builder()
                 .setHeader()
                 .setSkipHeaderRecord(true)
                 .build());
         for (CSVRecord record : parser) {
-            String group = record.get("group");
-            String type = record.get("type");
-            long weight = Long.parseLong(record.get("weight"));
+            group = record.get("group");
+            type = record.get("type");
+            weight = Long.parseLong(record.get("weight"));
             processOneObject(group, type, weight);
         }
         parser.close();
-        printStatistics(); // Вывод результатов обработки файла
     }
 
-    private void processOneObject(String group, String type, long weight) {
+    private static void processOneObject(String group, String type, long weight) {
         // Поиск дубликатов
-        if (!duplicates.containsKey(group)) {
-            duplicates.put(group, new HashMap<>());
-        }
-        Map<String, Integer> groupDuplicates = duplicates.get(group);
         String objectType = group + "-" + type;
-        if (groupDuplicates.containsKey(objectType)) {
-            int count = groupDuplicates.get(objectType);
-            groupDuplicates.put(objectType, count + 1);
+        if (fileSize < MAX_FILE_SIZE) {
+            if (!duplicates.containsKey(group)) {
+                duplicates.put(group, new HashMap<>());
+            }
+            groupDuplicates = duplicates.get(group);
+            if (groupDuplicates.containsKey(objectType)) {
+                int count = groupDuplicates.get(objectType);
+                groupDuplicates.put(objectType, count + 1);
+            } else {
+                groupDuplicates.put(objectType, 1);
+            }
         } else {
-            groupDuplicates.put(objectType, 1);
+            if (!uniqueStrings.contains(objectType)) {
+                uniqueStrings.add(objectType);
+                counts.add(1);
+            } else {
+                int index = uniqueStrings.indexOf(objectType);
+                int count = counts.get(index);
+                counts.set(index, count + 1);
+            }
         }
 
         // Суммирование веса объектов по группам
         if (groupWeights.containsKey(group)) {
-            long groupWeight = groupWeights.get(group);
-            groupWeights.put(group, groupWeight + weight);
+            BigInteger groupWeight = groupWeights.get(group);
+            groupWeights.put(group, groupWeight.add(BigInteger.valueOf(weight)));
         } else {
-            groupWeights.put(group, weight);
+            groupWeights.put(group, BigInteger.valueOf(weight));
         }
 
         // Поиск максимального и минимального веса объектов
@@ -101,42 +140,71 @@ public class FileProcessor {
         if (weight < minWeight) {
             minWeight = weight;
         }
+        printFreeMemory(false);
     }
 
-    public void processJson(File file) throws IOException {
-        Gson gson = new GsonBuilder().create();
-        JsonReader reader = new JsonReader(new FileReader(file));
+    public static void printFreeMemory(boolean flag) {
+        if (DEBUG_FLAG) {
+            count++;
+            if (count == 100000) {
+                countDone += count;
+                System.out.print(countDone + ": ");
+                count = 0;
+                flag = true;
+            }
+            if (flag) {
+                long freeMemory = Runtime.getRuntime().freeMemory();
+                System.out.println("Free memory in the heap: " + freeMemory + " bytes");
+                System.gc();
+                System.gc();
+            }
+        }
+    }
+
+    public static void processJson(File file) throws IOException {
+        reader = new JsonReader(new FileReader(file));
         reader.beginArray();
         while (reader.hasNext()) {
-            MyObject object = gson.fromJson(reader, MyObject.class);
-            String group = object.getGroup();
-            String type = object.getType();
-            long weight = object.getWeight();
+            object = gson.fromJson(reader, MyObject.class);
+            group = object.getGroup();
+            type = object.getType();
+            weight = object.getWeight();
             processOneObject(group, type, weight);
         }
         reader.endArray();
         reader.close();
-        printStatistics(); // Вывод результатов обработки файла
     }
 
-    private void printStatistics() {
-        System.out.println("Дубликаты:");
-        for (String group : duplicates.keySet()) {
-            for (String objectType : duplicates.get(group).keySet()) {
-                int count = duplicates.get(group).get(objectType);
+    private static void printStatistics() {
+        printFreeMemory(true);
+        System.out.println("Duplicates:");
+        if (fileSize < MAX_FILE_SIZE) {
+            for (String group : duplicates.keySet()) {
+                for (String objectType : duplicates.get(group).keySet()) {
+                    int count = duplicates.get(group).get(objectType);
+                    if (count > 1) {
+                        System.out.println(objectType + ": " + count);
+                    }
+                }
+            }
+        } else {
+            for (int i = 0; i < uniqueStrings.size(); i++) {
+                Integer count = counts.get(i);
                 if (count > 1) {
-                    System.out.println(objectType + " " + count);
+                    System.out.println(uniqueStrings.get(i) + ": " + count);
                 }
             }
         }
 
-        System.out.println("Суммарный вес объектов по группам:");
+        System.out.println("Total weight of objects by groups:");
         for (String group : groupWeights.keySet()) {
-            System.out.println(group + " " + groupWeights.get(group));
+            System.out.println(group + ": " + groupWeights.get(group));
         }
 
-        System.out.println("Максимальный вес объектов: " + maxWeight);
-        System.out.println("Минимальный вес объектов: " + minWeight);
+        System.out.println("Maximum weight of items: " + maxWeight);
+        System.out.println("Minimum weight of items: " + minWeight);
+
+        printFreeMemory(true);
     }
 
 }
