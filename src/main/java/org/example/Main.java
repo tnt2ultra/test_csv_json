@@ -20,6 +20,9 @@ public class Main {
                         FileProcessor.processFile(input);
                     } catch (IOException e) {
                         System.err.println("Error processing the file: " + e.getMessage());
+                    } catch (Throwable t) {
+                        System.err.println("Error processing the file: " + t.getMessage());
+                        t.printStackTrace();
                     }
                 }
             } while (!input.equals("exit"));

@@ -11,17 +11,15 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.math.BigInteger;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.nio.ByteBuffer;
+import java.util.*;
 
 public class FileProcessor {
-    static final int MAX_FILE_SIZE = 320 * 1024 * 1024;
-    static final boolean DEBUG_FLAG = false;
+    static final int MAX_FILE_SIZE = 1; // 320 * 1024 * 1024;
+    static final boolean DEBUG_FLAG = true;
+    public static final int MAX_COUNT = 1000000;
     static Map<String, Map<String, Integer>> duplicates = new HashMap<>(10);
-    static List<String> uniqueStrings = new LinkedList<>();
-    static List<Integer> counts = new LinkedList<>();
+    static List<ByteBuffer> mapsByteBuffer = new LinkedList<>();
     static Map<String, BigInteger> groupWeights = new HashMap<>();
     static long maxWeight;
     static long minWeight;
@@ -38,6 +36,8 @@ public class FileProcessor {
     static int count;
     static int countDone;
     static long fileSize;
+    static int countObjects;
+    static List<String> listStatistics = new ArrayList<>();
 
     public static boolean processFile(String path) throws IOException {
         clear();
@@ -47,22 +47,21 @@ public class FileProcessor {
             return false;
         }
         fileSize = file.length();
-        System.out.println("File size " + fileSize + " bytes. Using " + ((fileSize < MAX_FILE_SIZE) ? "Map" : "List"));
+        System.out.println("File size " + fileSize + " bytes. Using " + ((fileSize < MAX_FILE_SIZE) ? "Map" : "ByteBuffer"));
         fileExtension = getExtension(path); // Получение расширения файла
-        printFreeMemory(true);
         switch (fileExtension) {
             case "csv":
                 processCsv(file);
-                printStatistics();
-                return true;
+                break;
             case "json":
                 processJson(file);
-                printStatistics();
-                return true;
+                break;
             default:
                 System.err.println("Incorrect file format!");
                 return false;
         }
+        printStatistics();
+        return true;
     }
 
     public static String getExtension(String path) {
@@ -76,14 +75,19 @@ public class FileProcessor {
 
     private static void clear() {
         duplicates.clear();
-        uniqueStrings.clear();
-        counts.clear();
+        for (ByteBuffer buffer : mapsByteBuffer) {
+            buffer.clear();
+        }
+        mapsByteBuffer.clear();
         groupWeights.clear();
         maxWeight = Long.MIN_VALUE;
         minWeight = Long.MAX_VALUE;
         count = 0;
         countDone = 0;
         fileSize = 0;
+        countObjects = 0;
+        listStatistics.clear();
+        printFreeMemory(true);
     }
 
     private static void processCsv(File file) throws IOException {
@@ -103,26 +107,27 @@ public class FileProcessor {
     private static void processOneObject(String group, String type, long weight) {
         // Поиск дубликатов
         String objectType = group + "-" + type;
-        if (fileSize < MAX_FILE_SIZE) {
-            if (!duplicates.containsKey(group)) {
-                duplicates.put(group, new HashMap<>());
-            }
-            groupDuplicates = duplicates.get(group);
+        groupDuplicates = duplicates.get(group);
+        if (groupDuplicates == null) {
+            groupDuplicates = new HashMap<>();
+            groupDuplicates.put(objectType, 1);
+            duplicates.put(group, groupDuplicates);
+        } else {
             if (groupDuplicates.containsKey(objectType)) {
                 int count = groupDuplicates.get(objectType);
                 groupDuplicates.put(objectType, count + 1);
             } else {
                 groupDuplicates.put(objectType, 1);
             }
-        } else {
-            if (!uniqueStrings.contains(objectType)) {
-                uniqueStrings.add(objectType);
-                counts.add(1);
-            } else {
-                int index = uniqueStrings.indexOf(objectType);
-                int count = counts.get(index);
-                counts.set(index, count + 1);
-            }
+        }
+
+        countObjects++;
+        if (countObjects == MAX_COUNT) {
+            countObjects = 0;
+            ByteBuffer buffer = MapOfMapSerializer.serialize(duplicates);
+            mapsByteBuffer.add(buffer);
+            duplicates.clear();
+            printFreeMemory(true);
         }
 
         // Суммирование веса объектов по группам
@@ -146,7 +151,7 @@ public class FileProcessor {
     public static void printFreeMemory(boolean flag) {
         if (DEBUG_FLAG) {
             count++;
-            if (count == 100000) {
+            if (count == MAX_COUNT) {
                 countDone += count;
                 System.out.print(countDone + ": ");
                 count = 0;
@@ -154,7 +159,13 @@ public class FileProcessor {
             }
             if (flag) {
                 long freeMemory = Runtime.getRuntime().freeMemory();
-                System.out.println("Free memory in the heap: " + freeMemory + " bytes");
+                long totalMemory = Runtime.getRuntime().totalMemory();
+                long maxMemory = Runtime.getRuntime().maxMemory();
+                long usedMemory = totalMemory - freeMemory;
+                System.out.println("Free memory in the heap: " + (int) (freeMemory / 1024 / 1024)
+                        + " MB, totalMemory " + (int) (totalMemory / 1024 / 1024)
+                        + " MB, usedMemory " + (int) (usedMemory / 1024 / 1024)
+                        + " MB, maxMemory " + (int) (maxMemory / 1024 / 1024) + " MB ");
                 System.gc();
                 System.gc();
             }
@@ -175,36 +186,69 @@ public class FileProcessor {
         reader.close();
     }
 
-    private static void printStatistics() {
+    public static void printStatistics() {
         printFreeMemory(true);
-        System.out.println("Duplicates:");
-        if (fileSize < MAX_FILE_SIZE) {
-            for (String group : duplicates.keySet()) {
-                for (String objectType : duplicates.get(group).keySet()) {
-                    int count = duplicates.get(group).get(objectType);
-                    if (count > 1) {
-                        System.out.println(objectType + ": " + count);
+        fillStatistics();
+        for (String line : listStatistics) {
+            System.out.println(line);
+        }
+        printFreeMemory(true);
+    }
+
+    public static void fillStatistics() {
+        listStatistics.add("Duplicates:");
+        count = 0;
+        int countBuffers = 0;
+
+        countObjects = 0;
+        ByteBuffer bufferTemp = MapOfMapSerializer.serialize(duplicates);
+        mapsByteBuffer.add(bufferTemp);
+        duplicates.clear();
+        printFreeMemory(true);
+
+        for (ByteBuffer buffer : mapsByteBuffer) {
+            Map<String, Map<String, Integer>> sourceMap = MapOfMapSerializer.deserialize(buffer);
+            if (DEBUG_FLAG) System.out.print(countBuffers++ + " ");
+            for (Map.Entry<String, Map<String, Integer>> entry : sourceMap.entrySet()) {
+                String key = entry.getKey();
+                Map<String, Integer> innerMap = entry.getValue();
+                Map<String, Integer> newInnerMap = new HashMap<>();
+                for (Map.Entry<String, Integer> innerEntry : innerMap.entrySet()) {
+                    String innerKey = innerEntry.getKey();
+                    Integer value = innerEntry.getValue();
+                    if (value > 1) {
+                        newInnerMap.put(innerKey, value);
                     }
                 }
+                if (!newInnerMap.isEmpty()) {
+                    MapOfMapSerializer.MergeMap(duplicates, key, newInnerMap);
+                }
             }
-        } else {
-            for (int i = 0; i < uniqueStrings.size(); i++) {
-                Integer count = counts.get(i);
+        }
+        printFreeMemory(true);
+
+//        for (ByteBuffer buffer : mapsByteBuffer) {
+//            if (DEBUG_FLAG) System.out.print(countBuffers++ + ": ");
+//            // объединяем две мапы
+//            MapOfMapSerializer.mergeMaps(duplicates, buffer);
+//            printFreeMemory(true);
+//        }
+        for (String group : duplicates.keySet()) {
+            for (String objectType : duplicates.get(group).keySet()) {
+                int count = duplicates.get(group).get(objectType);
                 if (count > 1) {
-                    System.out.println(uniqueStrings.get(i) + ": " + count);
+                    listStatistics.add(objectType + ": " + count);
                 }
             }
         }
 
-        System.out.println("Total weight of objects by groups:");
+        listStatistics.add("Total weight of objects by groups:");
         for (String group : groupWeights.keySet()) {
-            System.out.println(group + ": " + groupWeights.get(group));
+            listStatistics.add(group + ": " + groupWeights.get(group));
         }
 
-        System.out.println("Maximum weight of items: " + maxWeight);
-        System.out.println("Minimum weight of items: " + minWeight);
-
-        printFreeMemory(true);
+        listStatistics.add("Maximum weight of items: " + maxWeight);
+        listStatistics.add("Minimum weight of items: " + minWeight);
     }
 
 }
