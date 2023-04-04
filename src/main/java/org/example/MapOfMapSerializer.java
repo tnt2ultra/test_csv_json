@@ -115,8 +115,6 @@ public class MapOfMapSerializer {
         if (result.containsKey(key)) {
             Map<String, Integer> existingMap = result.get(key);
             for (String innerKey : innerMap.keySet()) {
-//                    int newValue = innerMap.get(innerKey) + existingMap.getOrDefault(innerKey, 0);
-//                    existingMap.put(innerKey, newValue);
                 existingMap.merge(innerKey, innerMap.get(innerKey), Integer::sum);
             }
         } else {

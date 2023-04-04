@@ -113,7 +113,7 @@ class FileProcessorTest {
             System.out.println("The CSV file was successfully created and filled with data.");
 
         } catch (IOException e) {
-            System.out.println("Error when creating a CSV file: " + e.getMessage());
+            System.err.println("Error when creating a CSV file: " + e.getMessage());
         }
     }
 
@@ -167,7 +167,7 @@ class FileProcessorTest {
             System.out.println("The json file was successfully created and filled with data.");
 
         } catch (IOException e) {
-            System.out.println("Error when creating a json file: " + e.getMessage());
+            System.err.println("Error when creating a json file: " + e.getMessage());
         }
     }
 

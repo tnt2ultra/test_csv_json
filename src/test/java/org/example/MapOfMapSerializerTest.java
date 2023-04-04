@@ -31,7 +31,6 @@ public class MapOfMapSerializerTest {
         MapOfMapSerializer.serialize(buffer, originalMap);
 
         // десериализуем данные
-//        buffer.flip();
         Map<String, Map<String, Integer>> deserializedMap = MapOfMapSerializer.deserialize(buffer);
 
         // сравниваем полученный результат с ожидаемым
@@ -77,9 +76,6 @@ public class MapOfMapSerializerTest {
         newInnerMap2.put("key2", 4);
         newInnerMap2.put("key4", 5);
         newMapOfMap.put("map2", newInnerMap2);
-
-        // Возвращаем буфер
-//        buffer.flip();
 
         // объединяем две мапы
         MapOfMapSerializer.mergeMaps(newMapOfMap, buffer);
